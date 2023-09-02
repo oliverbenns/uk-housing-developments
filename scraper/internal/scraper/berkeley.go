@@ -1,9 +1,14 @@
 package scraper
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"strings"
+	"time"
 
+	"github.com/PuerkitoBio/goquery"
+	"github.com/chromedp/cdproto/runtime"
+	"github.com/chromedp/chromedp"
 	"github.com/gocolly/colly/v2"
 )
 
@@ -15,23 +20,22 @@ var _ Scraper = &Berkeley{}
 func (b *Berkeley) Scrape() ([]ScrapeResult, error) {
 	c := colly.NewCollector()
 	results := []ScrapeResult{}
-	countyPageUrls := []string{}
+	locationPageUrls := []string{}
 	baseUrl := "https://www.berkeleygroup.co.uk"
 
 	c.OnHTML("#mainNav > li:first-child .menu-second-level--navigation .menu-third-level--wrap a", func(e *colly.HTMLElement) {
 
 		link := e.Attr("href")
-		countyPageUrls = append(countyPageUrls, baseUrl+link)
+		locationPageUrls = append(locationPageUrls, baseUrl+link)
 	})
 
 	err := c.Visit(baseUrl)
 	if err != nil {
 		return nil, fmt.Errorf("could not visit %s: %w", baseUrl, err)
 	}
-	log.Print("a", countyPageUrls)
 
-	for _, pageUrl := range countyPageUrls {
-		locationResults, err := b.scrapeCountyPage(pageUrl)
+	for _, pageUrl := range locationPageUrls {
+		locationResults, err := b.scrapeLocationPage(baseUrl, pageUrl)
 		if err != nil {
 			return nil, err
 		}
@@ -42,25 +46,55 @@ func (b *Berkeley) Scrape() ([]ScrapeResult, error) {
 	return results, nil
 }
 
-func (b *Berkeley) scrapeCountyPage(pageUrl string) ([]ScrapeResult, error) {
-	c := colly.NewCollector()
+func (b *Berkeley) scrapeLocationPage(baseUrl, pageUrl string) ([]ScrapeResult, error) {
+	// Site uses ajax loading for their developments so colly not suitable.
+	ctx, cancel := chromedp.NewContext(context.Background())
+	defer cancel()
 	results := []ScrapeResult{}
 
-	c.OnHTML(".search-card", func(e *colly.HTMLElement) {
+	// Super hacky way of loading all results.
+	// Should update this to poll for new elements, check if last list item is still last list item, etc.
+	scrollDown := func(ctx context.Context) error {
+		for i := 0; i < 5; i++ {
+			// wait for network + render
+			time.Sleep(2 * time.Second)
+
+			_, exp, err := runtime.Evaluate(`window.scrollTo(0,document.body.scrollHeight);`).Do(ctx)
+			if err != nil {
+				return err
+			}
+			if exp != nil {
+				return exp
+			}
+		}
+
+		return nil
+	}
+
+	var html string
+
+	chromedp.Run(ctx,
+		chromedp.Navigate(pageUrl),
+		chromedp.ActionFunc(scrollDown),
+		chromedp.OuterHTML("html", &html, chromedp.ByQuery),
+	)
+
+	reader := strings.NewReader(html)
+	doc, err := goquery.NewDocumentFromReader(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	doc.Find(".result-wrapper").Each(func(i int, s *goquery.Selection) {
 		result := ScrapeResult{
 			Builder:  "Berkeley",
-			Name:     e.ChildText("h2.search-card__heading"),
-			Url:      e.ChildAttr("a.search-card__thumbnail", "href"),
-			Location: e.ChildText("div.search-card__address"),
+			Name:     s.Find("h2").Text(),
+			Url:      baseUrl + s.Find(".button--primary").AttrOr("href", ""),
+			Location: s.Find(".address").Text(),
 		}
 
 		results = append(results, result)
 	})
-
-	err := c.Visit(pageUrl)
-	if err != nil {
-		return nil, fmt.Errorf("could not visit %s: %w", pageUrl, err)
-	}
 
 	return results, nil
 
