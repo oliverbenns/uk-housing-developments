@@ -2,9 +2,11 @@ package scraper
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -39,13 +41,32 @@ func (b *Berkeley) Scrape() ([]Result, error) {
 		return nil, fmt.Errorf("could not visit %s: %w", baseUrl, err)
 	}
 
-	for _, pageUrl := range locationPageUrls {
-		locationResults, err := b.scrapeLocationPage(baseUrl, pageUrl)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, locationResults...)
+	// Scraper is slow due to ajax scroll functionality and
+	// loading in browser so run concurrently.
+	mu := sync.Mutex{}
+	var wg sync.WaitGroup
+	wg.Add(len(locationPageUrls))
+	errs := []error{}
 
+	for _, pageUrl := range locationPageUrls {
+		go func(closurePageUrl string) {
+			locationResults, err := b.scrapeLocationPage(baseUrl, closurePageUrl)
+			mu.Lock()
+			defer mu.Unlock()
+
+			if err != nil {
+				errs = append(errs, err)
+			} else {
+				results = append(results, locationResults...)
+			}
+			wg.Done()
+		}(pageUrl)
+	}
+
+	wg.Wait()
+
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 
 	return results, nil
