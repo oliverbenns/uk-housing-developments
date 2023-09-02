@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"sync"
 	"time"
 
@@ -23,12 +24,16 @@ func (s *Service) Run() ([]byte, error) {
 		return nil, err
 	}
 
+	// Scrapers run concurrently. Sort so
+	// that diff can easily be seen in the json out.
+	sort.Sort(ByUrl(results))
+
 	out := Out{
 		ScrapedAt: time.Now().UTC(),
 		Results:   results,
 	}
 
-	return json.Marshal(out)
+	return json.MarshalIndent(out, "", "  ")
 }
 
 func (s *Service) runScrapers() ([]Result, error) {
