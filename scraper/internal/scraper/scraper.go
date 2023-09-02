@@ -29,8 +29,12 @@ func (r *Result) Validate() error {
 		return errInvalidUrl
 	}
 
-	_, err := url.Parse(r.Url)
+	u, err := url.Parse(r.Url)
 	if err != nil {
+		return errInvalidUrl
+	}
+
+	if !u.IsAbs() {
 		return errInvalidUrl
 	}
 

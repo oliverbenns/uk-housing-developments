@@ -99,11 +99,14 @@ func (b *Berkeley) scrapeLocationPage(baseUrl, pageUrl string) ([]Result, error)
 
 	var html string
 
-	chromedp.Run(ctx,
+	err := chromedp.Run(ctx,
 		chromedp.Navigate(pageUrl),
 		chromedp.ActionFunc(scrollDown),
 		chromedp.OuterHTML("html", &html, chromedp.ByQuery),
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	reader := strings.NewReader(html)
 	doc, err := goquery.NewDocumentFromReader(reader)

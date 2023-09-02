@@ -34,7 +34,7 @@ func (b *Bellway) Scrape() ([]Result, error) {
 	}
 
 	for _, pageUrl := range locationPageUrls {
-		locationResults, err := b.scrapeLocationPage(pageUrl)
+		locationResults, err := b.scrapeLocationPage(baseUrl, pageUrl)
 		if err != nil {
 			return nil, err
 		}
@@ -45,14 +45,14 @@ func (b *Bellway) Scrape() ([]Result, error) {
 	return results, nil
 }
 
-func (b *Bellway) scrapeLocationPage(pageUrl string) ([]Result, error) {
+func (b *Bellway) scrapeLocationPage(baseUrl, pageUrl string) ([]Result, error) {
 	c := colly.NewCollector()
 	results := []Result{}
 
 	c.OnHTML(".search__results__list .tile", func(e *colly.HTMLElement) {
 		result := Result{
 			Name:     e.ChildText(".heading"),
-			Url:      e.ChildAttr(".tile__content > a", "href"),
+			Url:      baseUrl + e.ChildAttr(".tile__content > a", "href"),
 			Location: e.ChildText(".description"),
 		}
 
