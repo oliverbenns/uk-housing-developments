@@ -11,6 +11,10 @@ type Barratt struct {
 
 var _ Scraper = &Barratt{}
 
+func (b *Barratt) Name() string {
+	return "Barratt"
+}
+
 func (b *Barratt) Scrape() ([]ScrapeResult, error) {
 	c := colly.NewCollector()
 	results := []ScrapeResult{}
@@ -46,7 +50,6 @@ func (b *Barratt) scrapeLocationPage(pageUrl string) ([]ScrapeResult, error) {
 
 	c.OnHTML(".search-card", func(e *colly.HTMLElement) {
 		result := ScrapeResult{
-			Builder:  "Barratt",
 			Name:     e.ChildText("h2.search-card__heading"),
 			Url:      e.ChildAttr("a.search-card__thumbnail", "href"),
 			Location: e.ChildText("div.search-card__address"),

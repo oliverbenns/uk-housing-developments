@@ -1,12 +1,12 @@
 package scraper
 
 type ScrapeResult struct {
-	Builder  string `json:"builder"`
-	Name     string `json:"name"`
-	Url      string `json:"url"`
-	Location string `json:"location"`
+	Name     string
+	Url      string
+	Location string
 }
 
 type Scraper interface {
+	Name() string
 	Scrape() ([]ScrapeResult, error)
 }

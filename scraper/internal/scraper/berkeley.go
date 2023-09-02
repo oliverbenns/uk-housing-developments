@@ -17,6 +17,10 @@ type Berkeley struct {
 
 var _ Scraper = &Berkeley{}
 
+func (b *Berkeley) Name() string {
+	return "Berkeley"
+}
+
 func (b *Berkeley) Scrape() ([]ScrapeResult, error) {
 	c := colly.NewCollector()
 	results := []ScrapeResult{}
@@ -87,7 +91,6 @@ func (b *Berkeley) scrapeLocationPage(baseUrl, pageUrl string) ([]ScrapeResult, 
 
 	doc.Find(".result-wrapper").Each(func(i int, s *goquery.Selection) {
 		result := ScrapeResult{
-			Builder:  "Berkeley",
 			Name:     s.Find("h2").Text(),
 			Url:      baseUrl + s.Find(".button--primary").AttrOr("href", ""),
 			Location: s.Find(".address").Text(),

@@ -12,6 +12,10 @@ type TaylorWimpey struct {
 
 var _ Scraper = &TaylorWimpey{}
 
+func (tw *TaylorWimpey) Name() string {
+	return "Taylor Wimpey"
+}
+
 func (tw *TaylorWimpey) Scrape() ([]ScrapeResult, error) {
 	c := colly.NewCollector()
 	results := []ScrapeResult{}
@@ -63,7 +67,6 @@ func (tw *TaylorWimpey) scrapeLocationPage(pageUrl string) ([]ScrapeResult, erro
 
 	c.OnHTML(".hf-dev-segment-content", func(e *colly.HTMLElement) {
 		result := ScrapeResult{
-			Builder:  "Taylor Wimpey",
 			Name:     e.ChildText(".hf-dev-segment-content__heading-title a"),
 			Url:      e.ChildAttr(".hf-dev-segment-content__heading-title a", "href"),
 			Location: e.ChildText(".hf-dev-segment-content__location--address"),

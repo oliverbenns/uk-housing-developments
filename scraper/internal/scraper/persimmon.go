@@ -11,6 +11,10 @@ type Persimmon struct {
 
 var _ Scraper = &Persimmon{}
 
+func (p *Persimmon) Name() string {
+	return "Persimmon"
+}
+
 func (p *Persimmon) Scrape() ([]ScrapeResult, error) {
 	c := colly.NewCollector()
 	results := []ScrapeResult{}
@@ -46,7 +50,6 @@ func (p *Persimmon) scrapeDevelopmentPage(pageUrl string) ([]ScrapeResult, error
 
 	c.OnHTML("#details", func(e *colly.HTMLElement) {
 		result := ScrapeResult{
-			Builder:  "Persimmon",
 			Name:     e.ChildText("h1"),
 			Url:      pageUrl,
 			Location: e.ChildText("h1 + h2"),

@@ -11,6 +11,10 @@ type Bellway struct {
 
 var _ Scraper = &Bellway{}
 
+func (b *Bellway) Name() string {
+	return "Bellway"
+}
+
 func (b *Bellway) Scrape() ([]ScrapeResult, error) {
 	c := colly.NewCollector()
 	results := []ScrapeResult{}
@@ -46,7 +50,6 @@ func (b *Bellway) scrapeLocationPage(pageUrl string) ([]ScrapeResult, error) {
 
 	c.OnHTML(".search__results__list .tile", func(e *colly.HTMLElement) {
 		result := ScrapeResult{
-			Builder:  "Bellway",
 			Name:     e.ChildText(".heading"),
 			Url:      e.ChildAttr("tile_content > a", "href"),
 			Location: e.ChildText(".description"),
