@@ -16,9 +16,9 @@ func (tw *TaylorWimpey) Name() string {
 	return "Taylor Wimpey"
 }
 
-func (tw *TaylorWimpey) Scrape() ([]ScrapeResult, error) {
+func (tw *TaylorWimpey) Scrape() ([]Result, error) {
 	c := colly.NewCollector()
-	results := []ScrapeResult{}
+	results := []Result{}
 	locationPageUrls := []string{}
 	baseUrl := "https://www.taylorwimpey.co.uk"
 
@@ -36,7 +36,7 @@ func (tw *TaylorWimpey) Scrape() ([]ScrapeResult, error) {
 	// Sitemap does not distinguish by location type, so easy to get dupes.
 	// E.g. loading up Norwich page and Norfolk Page.
 	// Use development url as unique id.
-	resultsByUrl := map[string]ScrapeResult{}
+	resultsByUrl := map[string]Result{}
 	for _, pageUrl := range locationPageUrls {
 		locationResults, err := tw.scrapeLocationPage(pageUrl)
 		if err != nil {
@@ -61,18 +61,23 @@ func (tw *TaylorWimpey) Scrape() ([]ScrapeResult, error) {
 	return results, nil
 }
 
-func (tw *TaylorWimpey) scrapeLocationPage(pageUrl string) ([]ScrapeResult, error) {
+func (tw *TaylorWimpey) scrapeLocationPage(pageUrl string) ([]Result, error) {
 	c := colly.NewCollector()
-	results := []ScrapeResult{}
+	results := []Result{}
 
 	c.OnHTML(".hf-dev-segment-content", func(e *colly.HTMLElement) {
-		result := ScrapeResult{
+		result := Result{
 			Name:     e.ChildText(".hf-dev-segment-content__heading-title a"),
 			Url:      e.ChildAttr(".hf-dev-segment-content__heading-title a", "href"),
 			Location: e.ChildText(".hf-dev-segment-content__location--address"),
 		}
 
-		results = append(results, result)
+		err := result.Validate()
+		if err != nil {
+			log.Printf("invalid result so omitting %v: %v", result, err)
+		} else {
+			results = append(results, result)
+		}
 	})
 
 	err := c.Visit(pageUrl)

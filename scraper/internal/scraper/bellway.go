@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/gocolly/colly/v2"
 )
@@ -15,9 +16,9 @@ func (b *Bellway) Name() string {
 	return "Bellway"
 }
 
-func (b *Bellway) Scrape() ([]ScrapeResult, error) {
+func (b *Bellway) Scrape() ([]Result, error) {
 	c := colly.NewCollector()
-	results := []ScrapeResult{}
+	results := []Result{}
 	locationPageUrls := []string{}
 	baseUrl := "https://www.bellway.co.uk"
 
@@ -44,18 +45,23 @@ func (b *Bellway) Scrape() ([]ScrapeResult, error) {
 	return results, nil
 }
 
-func (b *Bellway) scrapeLocationPage(pageUrl string) ([]ScrapeResult, error) {
+func (b *Bellway) scrapeLocationPage(pageUrl string) ([]Result, error) {
 	c := colly.NewCollector()
-	results := []ScrapeResult{}
+	results := []Result{}
 
 	c.OnHTML(".search__results__list .tile", func(e *colly.HTMLElement) {
-		result := ScrapeResult{
+		result := Result{
 			Name:     e.ChildText(".heading"),
-			Url:      e.ChildAttr("tile_content > a", "href"),
+			Url:      e.ChildAttr(".tile__content > a", "href"),
 			Location: e.ChildText(".description"),
 		}
 
-		results = append(results, result)
+		err := result.Validate()
+		if err != nil {
+			log.Printf("invalid result so omitting %v: %v", result, err)
+		} else {
+			results = append(results, result)
+		}
 	})
 
 	err := c.Visit(pageUrl)

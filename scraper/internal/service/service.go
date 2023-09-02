@@ -11,37 +11,26 @@ import (
 
 type Service struct{}
 
-type ServiceOut struct {
-	ScrapedAt time.Time       `json:"scraped_at"`
-	Results   []ServiceResult `json:"results"`
-}
-
-type ServiceResult struct {
-	Builder  string `json:"builder"`
-	Name     string `json:"name"`
-	Url      string `json:"url"`
-	Location string `json:"location"`
-}
-
 func (s *Service) Run() ([]byte, error) {
 	scrapers := []scraper.Scraper{
-		&scraper.Barratt{},
+		//&scraper.Barratt{},
 		//&scraper.Persimmon{},
-		//&scraper.Bellway{},
+		&scraper.Bellway{},
 		//&scraper.TaylorWimpey{},
 		//	&scraper.Berkeley{},
 	}
 
-	serviceResults := []ServiceResult{}
+	serviceResults := []Result{}
 
 	for _, scraper := range scrapers {
+		startTime := time.Now()
 		results, err := scraper.Scrape()
 		if err != nil {
 			return nil, fmt.Errorf("could not scrape %s: %w", scraper.Name(), err)
 		}
 
 		for _, result := range results {
-			serviceResult := ServiceResult{
+			serviceResult := Result{
 				Builder:  scraper.Name(),
 				Name:     result.Name,
 				Url:      result.Url,
@@ -51,13 +40,12 @@ func (s *Service) Run() ([]byte, error) {
 			serviceResults = append(serviceResults, serviceResult)
 		}
 
-		log.Printf("Finished scraping %s", scraper.Name())
+		elapsed := time.Now().Sub(startTime)
+		log.Printf("finished scraping %s, took %s", scraper.Name(), elapsed.String())
+
 	}
 
-	log.Printf("all: %v", serviceResults)
-
-	// @TODO: save to json
-	out := ServiceOut{
+	out := Out{
 		ScrapedAt: time.Now().UTC(),
 		Results:   serviceResults,
 	}

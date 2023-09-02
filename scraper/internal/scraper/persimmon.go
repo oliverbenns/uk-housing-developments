@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/gocolly/colly/v2"
 )
@@ -15,9 +16,9 @@ func (p *Persimmon) Name() string {
 	return "Persimmon"
 }
 
-func (p *Persimmon) Scrape() ([]ScrapeResult, error) {
+func (p *Persimmon) Scrape() ([]Result, error) {
 	c := colly.NewCollector()
-	results := []ScrapeResult{}
+	results := []Result{}
 	developmentPageUrls := []string{}
 	baseUrl := "https://www.persimmonhomes.com"
 
@@ -44,18 +45,23 @@ func (p *Persimmon) Scrape() ([]ScrapeResult, error) {
 	return results, nil
 }
 
-func (p *Persimmon) scrapeDevelopmentPage(pageUrl string) ([]ScrapeResult, error) {
+func (p *Persimmon) scrapeDevelopmentPage(pageUrl string) ([]Result, error) {
 	c := colly.NewCollector()
-	results := []ScrapeResult{}
+	results := []Result{}
 
 	c.OnHTML("#details", func(e *colly.HTMLElement) {
-		result := ScrapeResult{
+		result := Result{
 			Name:     e.ChildText("h1"),
 			Url:      pageUrl,
 			Location: e.ChildText("h1 + h2"),
 		}
 
-		results = append(results, result)
+		err := result.Validate()
+		if err != nil {
+			log.Printf("invalid result so omitting %v: %v", result, err)
+		} else {
+			results = append(results, result)
+		}
 	})
 
 	err := c.Visit(pageUrl)

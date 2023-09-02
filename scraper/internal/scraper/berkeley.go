@@ -3,6 +3,7 @@ package scraper
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -21,9 +22,9 @@ func (b *Berkeley) Name() string {
 	return "Berkeley"
 }
 
-func (b *Berkeley) Scrape() ([]ScrapeResult, error) {
+func (b *Berkeley) Scrape() ([]Result, error) {
 	c := colly.NewCollector()
-	results := []ScrapeResult{}
+	results := []Result{}
 	locationPageUrls := []string{}
 	baseUrl := "https://www.berkeleygroup.co.uk"
 
@@ -50,11 +51,11 @@ func (b *Berkeley) Scrape() ([]ScrapeResult, error) {
 	return results, nil
 }
 
-func (b *Berkeley) scrapeLocationPage(baseUrl, pageUrl string) ([]ScrapeResult, error) {
+func (b *Berkeley) scrapeLocationPage(baseUrl, pageUrl string) ([]Result, error) {
 	// Site uses ajax loading for their developments so colly not suitable.
 	ctx, cancel := chromedp.NewContext(context.Background())
 	defer cancel()
-	results := []ScrapeResult{}
+	results := []Result{}
 
 	// Super hacky way of loading all results.
 	// Should update this to poll for new elements, check if last list item is still last list item, etc.
@@ -90,13 +91,18 @@ func (b *Berkeley) scrapeLocationPage(baseUrl, pageUrl string) ([]ScrapeResult, 
 	}
 
 	doc.Find(".result-wrapper").Each(func(i int, s *goquery.Selection) {
-		result := ScrapeResult{
+		result := Result{
 			Name:     s.Find("h2").Text(),
 			Url:      baseUrl + s.Find(".button--primary").AttrOr("href", ""),
 			Location: s.Find(".address").Text(),
 		}
 
-		results = append(results, result)
+		err := result.Validate()
+		if err != nil {
+			log.Printf("invalid result so omitting %v: %v", result, err)
+		} else {
+			results = append(results, result)
+		}
 	})
 
 	return results, nil
