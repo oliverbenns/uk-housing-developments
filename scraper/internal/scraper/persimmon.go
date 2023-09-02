@@ -59,9 +59,10 @@ func (p *Persimmon) scrapeDevelopmentPage(pageUrl string) ([]Result, error) {
 		err := result.Validate()
 		if err != nil {
 			log.Printf("invalid result so omitting %v: %v", result, err)
-		} else {
-			results = append(results, result)
+			return
 		}
+
+		results = append(results, result)
 	})
 
 	err := c.Visit(pageUrl)

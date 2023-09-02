@@ -1,10 +1,17 @@
 package scraper
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gocolly/colly/v2"
+	"github.com/oliverbenns/uk-housing-developments/scraper/internal/cloudflare"
 )
 
 type TaylorWimpey struct {
@@ -17,74 +24,138 @@ func (tw *TaylorWimpey) Name() string {
 }
 
 func (tw *TaylorWimpey) Scrape() ([]Result, error) {
-	c := colly.NewCollector()
 	results := []Result{}
-	locationPageUrls := []string{}
 	baseUrl := "https://www.taylorwimpey.co.uk"
 
-	c.OnHTML("a.map-point", func(e *colly.HTMLElement) {
-		link := e.Attr("href")
-		locationPageUrls = append(locationPageUrls, baseUrl+link)
-	})
-
-	sitemapUrl := baseUrl + "/sitemap"
-	err := c.Visit(sitemapUrl)
+	developments, err := tw.requestDevelopments(baseUrl + "/api/tw/DevelopmentSearch/GetDevelopments")
 	if err != nil {
-		return nil, fmt.Errorf("could not visit %s: %w", sitemapUrl, err)
+		return nil, err
 	}
 
-	// Sitemap does not distinguish by location type, so easy to get dupes.
-	// E.g. loading up Norwich page and Norfolk Page.
-	// Use development url as unique id.
-	resultsByUrl := map[string]Result{}
-	for _, pageUrl := range locationPageUrls {
-		locationResults, err := tw.scrapeLocationPage(pageUrl)
+	for _, development := range developments {
+		log.Print(development.Url)
+		locationResult, err := tw.scrapeDevelopmentPage(baseUrl, development)
 		if err != nil {
 			return nil, err
 		}
+		log.Print("locResult", locationResult)
 
-		for _, locationResult := range locationResults {
-			_, ok := resultsByUrl[locationResult.Url]
-			if !ok {
-				resultsByUrl[locationResult.Url] = locationResult
-				continue
-			} else {
-				log.Print("dupe found!", locationResult)
-			}
-		}
-	}
-
-	for _, result := range resultsByUrl {
-		results = append(results, result)
+		results = append(results, locationResult)
 	}
 
 	return results, nil
 }
 
-func (tw *TaylorWimpey) scrapeLocationPage(pageUrl string) ([]Result, error) {
-	c := colly.NewCollector()
-	results := []Result{}
+var errParseSubHeading = errors.New("could not parse subheading")
 
-	c.OnHTML(".hf-dev-segment-content", func(e *colly.HTMLElement) {
-		result := Result{
-			Name:     e.ChildText(".hf-dev-segment-content__heading-title a"),
-			Url:      e.ChildAttr(".hf-dev-segment-content__heading-title a", "href"),
-			Location: e.ChildText(".hf-dev-segment-content__location--address"),
+// We actually get most of the info from the API.
+// But we do not have the location so use the page src.
+func (tw *TaylorWimpey) scrapeDevelopmentPage(baseUrl string, development TaylorWimpeyAPIDevelopment) (Result, error) {
+	c := colly.NewCollector()
+	cloudflareTransport := cloudflare.NewTransport()
+	c.WithTransport(&cloudflareTransport)
+	// Some development pages are slow. Or Cloudflare throttle?
+	c.SetRequestTimeout(20 * time.Second)
+
+	pageUrl := baseUrl + development.Url
+	result := Result{}
+	redirectUrl := ""
+
+	c.OnResponse(func(r *colly.Response) {
+		requestUrl := r.Request.URL.String()
+		if requestUrl != pageUrl {
+			redirectUrl = requestUrl
+		}
+	})
+
+	var parseErr error
+	c.OnHTML("html", func(e *colly.HTMLElement) {
+		subHeading := e.ChildText(".landing-page-hero__standfirst")
+		subHeadingParts := strings.Split(subHeading, "Prices from")
+		if len(subHeadingParts) == 0 {
+			parseErr = errParseSubHeading
+			return
 		}
 
-		err := result.Validate()
-		if err != nil {
-			log.Printf("invalid result so omitting %v: %v", result, err)
-		} else {
-			results = append(results, result)
+		result = Result{
+			Name:     e.ChildText("h1.landing-page-hero__title"),
+			Url:      pageUrl,
+			Location: subHeadingParts[0],
 		}
 	})
 
 	err := c.Visit(pageUrl)
 	if err != nil {
-		return nil, fmt.Errorf("could not visit %s: %w", pageUrl, err)
+		return Result{}, fmt.Errorf("could not visit %s: %w", pageUrl, err)
 	}
 
-	return results, nil
+	// Some developments have their own website.
+	// We can't scrape all so take a best guess with just the API data we have.
+	if redirectUrl != "" {
+		log.Print("redirect url", redirectUrl)
+		result = Result{
+			Name: development.Name,
+			Url:  redirectUrl,
+			// Probably going to fail location lookup.
+			Location: development.Name,
+		}
+	}
 
+	// we know it's not redirect so page should be parsable
+	if parseErr != nil {
+		return Result{}, parseErr
+	}
+
+	err = result.Validate()
+	if err != nil {
+		log.Printf("invalid result so omitting %v: %v", result, err)
+		return Result{}, err
+	}
+
+	return result, nil
+}
+
+type TaylorWimpeyAPIDevelopmentResponse struct {
+	Results []TaylorWimpeyAPIDevelopment `json:"Results"`
+	Status  string                       `json:"Status"`
+}
+
+type TaylorWimpeyAPIDevelopment struct {
+	Name string `json:"Name"`
+	Type int    `json:"Type"`
+	Url  string `json:"Url"`
+}
+
+var errInvalidResponseCode = errors.New("invalid response code")
+
+func (tw *TaylorWimpey) requestDevelopments(apiUrl string) ([]TaylorWimpeyAPIDevelopment, error) {
+	client := cloudflare.CreateHttpClient()
+
+	req, err := http.NewRequest("GET", apiUrl, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("could not get %s, code %d: %w", apiUrl, resp.StatusCode, errInvalidResponseCode)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var res TaylorWimpeyAPIDevelopmentResponse
+	err = json.Unmarshal(body, &res)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Results, nil
 }

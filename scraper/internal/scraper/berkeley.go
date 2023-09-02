@@ -124,9 +124,10 @@ func (b *Berkeley) scrapeLocationPage(baseUrl, pageUrl string) ([]Result, error)
 		err := result.Validate()
 		if err != nil {
 			log.Printf("invalid result so omitting %v: %v", result, err)
-		} else {
-			results = append(results, result)
+			return
 		}
+
+		results = append(results, result)
 	})
 
 	return results, nil

@@ -24,6 +24,7 @@ func (s *Service) Run() ([]byte, error) {
 
 	for _, scraper := range scrapers {
 		startTime := time.Now()
+		log.Printf("scraping %s", scraper.Name())
 		results, err := scraper.Scrape()
 		if err != nil {
 			return nil, fmt.Errorf("could not scrape %s: %w", scraper.Name(), err)
