@@ -10,8 +10,10 @@ type Out struct {
 }
 
 type Result struct {
-	Builder  string `json:"builder"`
-	Name     string `json:"name"`
-	Url      string `json:"url"`
-	Location string `json:"location"`
+	Builder  string   `json:"builder"`
+	Name     string   `json:"name"`
+	Url      string   `json:"url"`
+	Location string   `json:"location"`
+	Lat      *float64 `json:"lat,omitempty"`
+	Lng      *float64 `json:"lng,omitempty"`
 }

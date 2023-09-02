@@ -9,26 +9,36 @@ import (
 	"time"
 
 	"github.com/oliverbenns/uk-housing-developments/scraper/internal/scraper"
+	"googlemaps.github.io/maps"
 )
 
-type Service struct{}
+type Service struct {
+	GoogleMapsClient *maps.Client
+	Scrapers         []scraper.Scraper
+}
 
 func (s *Service) Run() ([]byte, error) {
-	scrapers := []scraper.Scraper{
-		//&scraper.Barratt{},
-		//&scraper.Persimmon{},
-		&scraper.Bellway{},
-		//&scraper.TaylorWimpey{},
-		//	&scraper.Berkeley{},
+	results, err := s.runScrapers()
+	if err != nil {
+		return nil, err
 	}
 
+	out := Out{
+		ScrapedAt: time.Now().UTC(),
+		Results:   results,
+	}
+
+	return json.Marshal(out)
+}
+
+func (s *Service) runScrapers() ([]Result, error) {
 	serviceResults := []Result{}
 	mu := sync.Mutex{}
 	var wg sync.WaitGroup
-	wg.Add(len(scrapers))
+	wg.Add(len(s.Scrapers))
 	errs := []error{}
 
-	for _, sc := range scrapers {
+	for _, sc := range s.Scrapers {
 		go func(closureScraper scraper.Scraper) {
 			defer wg.Done()
 
@@ -69,10 +79,5 @@ func (s *Service) Run() ([]byte, error) {
 		return nil, errors.Join(errs...)
 	}
 
-	out := Out{
-		ScrapedAt: time.Now().UTC(),
-		Results:   serviceResults,
-	}
-
-	return json.Marshal(out)
+	return serviceResults, nil
 }

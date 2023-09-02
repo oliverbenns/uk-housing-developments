@@ -33,7 +33,6 @@ func (tw *TaylorWimpey) Scrape() ([]Result, error) {
 	}
 
 	for _, development := range developments {
-		log.Print(development.Url)
 		locationResult, err := tw.scrapeDevelopmentPage(baseUrl, development)
 		if err != nil {
 			return nil, err
@@ -41,6 +40,9 @@ func (tw *TaylorWimpey) Scrape() ([]Result, error) {
 		log.Print("locResult", locationResult)
 
 		results = append(results, locationResult)
+
+		// Cloudflare rate limiting or just being hella slow.
+		time.Sleep(10 * time.Second)
 	}
 
 	return results, nil
@@ -92,7 +94,6 @@ func (tw *TaylorWimpey) scrapeDevelopmentPage(baseUrl string, development Taylor
 	// Some developments have their own website.
 	// We can't scrape all so take a best guess with just the API data we have.
 	if redirectUrl != "" {
-		log.Print("redirect url", redirectUrl)
 		result = Result{
 			Name: development.Name,
 			Url:  redirectUrl,
