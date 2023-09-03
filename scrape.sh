@@ -1,5 +1,5 @@
 #!/bin/bash
 
 pushd scraper
-go run . > ../data.json
+go run . > ../site/public/developments.json
 popd

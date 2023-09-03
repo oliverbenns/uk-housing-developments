@@ -1,0 +1,44 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
+    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+}
+
+.map {
+  height: 75vh;
+  width: 75vw;
+}
+
+.mapboxgl-popup-content {
+  padding: 8px;
+  font-size: 10px;
+}
+header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rbga(255, 255, 255, 0.8);
+  padding: 8px;
+  text-align: center;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+header a {
+  font-size: 0.8rem;
+}
