@@ -33,14 +33,24 @@ func (b *Barratt) Scrape() ([]Result, error) {
 		return nil, fmt.Errorf("could not visit %s: %w", listUrl, err)
 	}
 
+	// As we scrape pages that are sometimes have the same
+	// or subset of developments, de-dupe with a map.
+	resultsMap := map[string]Result{}
 	for _, pageUrl := range locationPageUrls {
 		locationResults, err := b.scrapeLocationPage(pageUrl)
 		if err != nil {
 			return nil, err
 		}
-		results = append(results, locationResults...)
 
+		for _, locationResult := range locationResults {
+			resultsMap[locationResult.Url] = locationResult
+		}
 	}
+
+	for _, val := range resultsMap {
+		results = append(results, val)
+	}
+	log.Print("results", results)
 
 	return results, nil
 }
