@@ -23,9 +23,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - uses: actions/configure-pages@v2
-      - uses: actions/upload-pages-artifact@v1
+      - uses: actions/upload-pages-artifact@v3
         with:
-          path: ./site/build
+          path: ./build
   deploy:
     needs: build
     environment:

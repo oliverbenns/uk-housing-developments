@@ -1,5 +1,5 @@
 #!/bin/bash
 
 pushd scraper
-go run . > ../site/public/developments.json
+env $(cat .env | xargs) go run . > ../site/public/developments.json
 popd
