@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/oliverbenns/uk-housing-developments/scraper/internal/location"
 	"github.com/oliverbenns/uk-housing-developments/scraper/internal/scraper"
 	"github.com/oliverbenns/uk-housing-developments/scraper/internal/service"
 	"googlemaps.github.io/maps"
@@ -21,8 +22,12 @@ func main() {
 		log.Fatalf("could not create google maps client: %v", err)
 	}
 
-	svc := service.Service{
+	locationClient := &location.Client{
 		GoogleMapsClient: googleMapsClient,
+	}
+
+	svc := service.Service{
+		LocationClient: locationClient,
 		Scrapers: []scraper.Scraper{
 			&scraper.Barratt{},
 			&scraper.Persimmon{},

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/oliverbenns/uk-housing-developments/scraper/internal/location"
 	"github.com/oliverbenns/uk-housing-developments/scraper/internal/scraper"
 	"googlemaps.github.io/maps"
 )
@@ -16,6 +18,7 @@ import (
 type Service struct {
 	GoogleMapsClient *maps.Client
 	Scrapers         []scraper.Scraper
+	LocationClient   *location.Client
 }
 
 func (s *Service) Run() ([]byte, error) {
@@ -27,6 +30,11 @@ func (s *Service) Run() ([]byte, error) {
 	// Scrapers run concurrently. Sort so
 	// that diff can easily be seen in the json out.
 	sort.Sort(ByUrl(results))
+
+	results, err = s.addLatLngs(results)
+	if err != nil {
+		return nil, err
+	}
 
 	out := Out{
 		ScrapedAt: time.Now().UTC(),
@@ -85,4 +93,23 @@ func (s *Service) runScrapers() ([]Result, error) {
 	}
 
 	return serviceResults, nil
+}
+
+func (s *Service) addLatLngs(results []Result) ([]Result, error) {
+	resultsWithLocs := []Result{}
+
+	for _, result := range results {
+		res, err := s.LocationClient.GetFromAddress(context.Background(), result.Location)
+		if err != nil {
+			log.Printf("could not get lat/lng for for place %v", result)
+			continue
+		}
+
+		result.Lat = &res.Lat
+		result.Lng = &res.Lng
+		log.Print("result with loc", result)
+		resultsWithLocs = append(resultsWithLocs, result)
+	}
+
+	return resultsWithLocs, nil
 }

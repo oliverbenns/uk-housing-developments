@@ -33,7 +33,7 @@ func (tw *TaylorWimpey) Scrape() ([]Result, error) {
 	}
 
 	for _, development := range developments {
-		locationResult, err := tw.scrapeDevelopmentPage(baseUrl, development)
+		locationResult, err := tw.scrapeDevelopmentPageWithRetry(baseUrl, development, 5)
 		if err != nil {
 			return nil, err
 		}
@@ -49,6 +49,24 @@ func (tw *TaylorWimpey) Scrape() ([]Result, error) {
 }
 
 var errParseSubHeading = errors.New("could not parse subheading")
+
+// Due to terrible website timeouts.
+func (tw *TaylorWimpey) scrapeDevelopmentPageWithRetry(baseUrl string, development TaylorWimpeyAPIDevelopment, retryCount int) (Result, error) {
+	var result Result
+	var err error
+	for i := 0; i < retryCount; i++ {
+		result, err = tw.scrapeDevelopmentPage(baseUrl, development)
+		if err != nil {
+			log.Printf("could not get development page %s, retries left: %d", development.Url, retryCount-1-i)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		return result, nil
+	}
+
+	return Result{}, err
+}
 
 // We actually get most of the info from the API.
 // But we do not have the location so use the page src.
