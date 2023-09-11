@@ -40,9 +40,6 @@ func (tw *TaylorWimpey) Scrape() ([]Result, error) {
 		log.Print("locResult", locationResult)
 
 		results = append(results, locationResult)
-
-		// Cloudflare rate limiting or just being hella slow.
-		time.Sleep(10 * time.Second)
 	}
 
 	return results, nil
@@ -58,7 +55,8 @@ func (tw *TaylorWimpey) scrapeDevelopmentPageWithRetry(baseUrl string, developme
 		result, err = tw.scrapeDevelopmentPage(baseUrl, development)
 		if err != nil {
 			log.Printf("could not get development page %s, retries left: %d", development.Url, retryCount-1-i)
-			time.Sleep(5 * time.Second)
+			numSecs := time.Duration(5 * (i + 1))
+			time.Sleep(numSecs * time.Second)
 			continue
 		}
 
