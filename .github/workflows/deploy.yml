@@ -22,10 +22,11 @@ jobs:
           node-version: 17.5.0
       - run: npm ci
       - run: npm run build
+      - run: ls
       - uses: actions/configure-pages@v2
       - uses: actions/upload-pages-artifact@v2
         with:
-          path: ./build
+          path: ./site/build
   deploy:
     needs: build
     environment:
