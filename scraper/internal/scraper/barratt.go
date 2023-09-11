@@ -50,7 +50,6 @@ func (b *Barratt) Scrape() ([]Result, error) {
 	for _, val := range resultsMap {
 		results = append(results, val)
 	}
-	log.Print("results", results)
 
 	return results, nil
 }

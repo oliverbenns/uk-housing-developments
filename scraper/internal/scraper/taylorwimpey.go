@@ -37,7 +37,6 @@ func (tw *TaylorWimpey) Scrape() ([]Result, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Print("locResult", locationResult)
 
 		results = append(results, locationResult)
 	}
