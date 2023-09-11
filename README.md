@@ -14,5 +14,6 @@ View the project here: [oliverbenns.github.io/uk-housing-developments](https://o
 
 ### Scraper
 
+- `docker compose up -d`
 - `cp .env.example .env`
 - Run the shell script `sh scrape.sh`
