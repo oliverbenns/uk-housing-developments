@@ -107,7 +107,6 @@ func (s *Service) addLatLngs(results []Result) ([]Result, error) {
 
 		result.Lat = &res.Lat
 		result.Lng = &res.Lng
-		log.Print("result with loc", result)
 		resultsWithLocs = append(resultsWithLocs, result)
 	}
 

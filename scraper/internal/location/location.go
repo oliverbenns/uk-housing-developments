@@ -3,17 +3,20 @@ package location
 import (
 	"context"
 	"errors"
+	"log"
 
+	"github.com/redis/go-redis/v9"
 	"googlemaps.github.io/maps"
 )
 
 type Client struct {
 	GoogleMapsClient *maps.Client
+	RedisClient      *redis.Client
 }
 
 type Geometry struct {
-	Lat float64
-	Lng float64
+	Lat float64 `json:"lat"`
+	Lng float64 `json:"lng"`
 }
 
 func (c *Client) GetFromAddress(ctx context.Context, address string) (Geometry, error) {
@@ -43,6 +46,17 @@ func (c *Client) GetFromAddress(ctx context.Context, address string) (Geometry, 
 var errNotFound = errors.New("not found")
 
 func (c *Client) get(ctx context.Context, address string) (Geometry, error) {
+	geometry, err := c.getFromCache(ctx, address)
+	if err == nil {
+		log.Printf("got from cache: %s - %v", address, geometry)
+		return geometry, nil
+	}
+
+	// genuine err - not cache miss
+	if err != redis.Nil {
+		return Geometry{}, err
+	}
+
 	params := &maps.FindPlaceFromTextRequest{
 		Input:     address,
 		InputType: maps.FindPlaceFromTextInputTypeTextQuery,
@@ -60,11 +74,13 @@ func (c *Client) get(ctx context.Context, address string) (Geometry, error) {
 	}
 
 	candidate := res.Candidates[0]
-	geometry := Geometry{
-		Lat: candidate.Geometry.Location.Lat,
-		Lng: candidate.Geometry.Location.Lng,
+	geometry.Lat = candidate.Geometry.Location.Lat
+	geometry.Lng = candidate.Geometry.Location.Lng
+
+	err = c.saveToCache(ctx, address, geometry)
+	if err != nil {
+		return Geometry{}, err
 	}
 
 	return geometry, nil
-
 }
