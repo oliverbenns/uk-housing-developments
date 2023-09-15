@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useMemo } from "react";
+import { useRef, useEffect, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import { FeatureCollection, Feature, Point } from "geojson";
 import barrattLogo from "./logos/Barratt.png";
