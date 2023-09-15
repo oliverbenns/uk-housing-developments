@@ -1,7 +1,11 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState, useMemo } from "react";
 import mapboxgl from "mapbox-gl";
-import proj4 from "proj4";
-import { FeatureCollection, Polygon } from "geojson";
+import { FeatureCollection, Feature, Point } from "geojson";
+import barrattLogo from "./logos/Barratt.png";
+import bellwayLogo from "./logos/Bellway.png";
+import berkeleyLogo from "./logos/Berkeley.png";
+import persimmonLogo from "./logos/Persimmon.png";
+import taylorWimpeyLogo from "./logos/TaylorWimpey.png";
 
 // https://github.com/visgl/react-map-gl/issues/1266
 // @ts-ignore
@@ -11,23 +15,40 @@ import MapboxWorker from "worker-loader!mapbox-gl/dist/mapbox-gl-csp-worker";
 // @ts-ignore
 mapboxgl.workerClass = MapboxWorker;
 
-interface CountyProperties {
-  GlobalID: string;
-  OBJECTID: number;
-  bng_e: number;
-  bng_n: number;
-  ctyua19cd: string;
-  ctyua19nm: string;
-  ctyua19nmw: string;
+const builderColors: [string, string][] = [
+  ["Barratt", "#a3ca36"],
+  ["Bellway", "#f37021"],
+  ["Berkeley", "#cc0e25"],
+  ["Persimmon", "#33b28b"],
+  ["Taylor Wimpey", "#735394"],
+];
+
+const builderLogos: Record<string, string> = {
+  Barratt: barrattLogo,
+  Bellway: bellwayLogo,
+  Berkeley: berkeleyLogo,
+  Persimmon: persimmonLogo,
+  "Taylor Wimpey": taylorWimpeyLogo,
+};
+
+interface DevelopmentResult {
+  builder: string;
   lat: number;
-  long: number;
+  lng: number;
+  location: string;
+  name: string;
+  url: string;
 }
 
-type BoundaryData = FeatureCollection<Polygon, CountyProperties>;
+interface DevelopmentData {
+  scraped_at: string;
+  results: DevelopmentResult[];
+}
 
 function App() {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const [data, setData] = useState<DevelopmentData>();
 
   useEffect(() => {
     if (map.current) {
@@ -37,7 +58,7 @@ function App() {
     map.current = new mapboxgl.Map({
       container: mapContainer.current as HTMLElement,
       accessToken: process.env.REACT_APP_MAPBOX_ACCESS_TOKEN,
-      style: "mapbox://styles/mapbox/light-v11",
+      style: "mapbox://styles/mapbox/dark-v11",
       center: [-3.4735, 54.1171],
       zoom: 4.5,
       projection: {
@@ -50,33 +71,29 @@ function App() {
         throw new Error("could not get map ref");
       }
 
-      removeLabels(map.current);
-
       (async () => {
-        const res = await fetch(`${process.env.PUBLIC_URL}/boundaries.geojson`);
-        const data = (await res.json()) as BoundaryData;
-        console.log("data", data);
-
-        // Data is in EPSG:27700 (British National Grid) format and Mapbox requires it in EPSG:4326.
-        normalizeData(data);
+        const res = await fetch(`${process.env.PUBLIC_URL}/developments.json`);
+        const data = (await res.json()) as DevelopmentData;
+        setData(data);
+        const results = convertToGeoJson(data.results);
 
         if (!map.current) {
           throw new Error("could not get map ref");
         }
 
-        map.current.addSource("boundaries", {
+        map.current.addSource("developments", {
           type: "geojson",
-          data: data,
+          data: results,
         });
 
         addLayers(map.current);
-        addHoverListeners(map.current);
+        addClickListeners(map.current);
       })();
     });
   });
 
   return (
-    <div>
+    <>
       <header>
         <h1>UK Housing Developments</h1>
         <a
@@ -86,145 +103,111 @@ function App() {
         >
           View on Github
         </a>
+        <ul>
+          {builderColors.map((val) => {
+            const [name, color] = val;
+            return (
+              <li key={name}>
+                <span className="bull" style={{ backgroundColor: color }} />
+                {name}
+              </li>
+            );
+          })}
+        </ul>
+        {data && <i>Data at {data.scraped_at.split("T")[0]}</i>}
       </header>
       <main>
         <div ref={mapContainer} className="map" />
       </main>
-    </div>
+    </>
   );
 }
 
-// Remove programmatically so no need to create a new style in mapbox studio.
-// Does result in flash though on initial load.
-const removeLabels = (map: mapboxgl.Map) => {
-  map.getStyle().layers.forEach((l) => {
-    if (l.type === "symbol") {
-      map.setLayoutProperty(l.id, "visibility", "none");
-    }
-  });
-};
-
 const addLayers = (map: mapboxgl.Map) => {
   map.addLayer({
-    id: "boundaries-fill",
-    type: "fill",
-    source: "boundaries",
-    layout: {},
+    id: "developments-point",
+    type: "circle",
+    source: "developments",
     paint: {
-      "fill-color": "#0080ff",
-      "fill-opacity": [
-        "case",
-        ["boolean", ["feature-state", "hover"], false],
-        1,
-        0.5,
+      "circle-radius": {
+        base: 1.75,
+        stops: [
+          [2, 2],
+          [8, 4],
+          [12, 14],
+        ],
+      },
+      "circle-color": [
+        "match",
+        ["get", "builder"],
+        ...builderColors.flat(),
+        "red",
       ],
     },
   });
-
-  map.addLayer({
-    id: "boundaries-line",
-    type: "line",
-    source: "boundaries",
-    layout: {},
-    paint: {
-      "line-color": "#000",
-      "line-width": 1,
-    },
-  });
 };
 
-const addHoverListeners = (map: mapboxgl.Map) => {
-  let hoveredFeatureId: string | number | undefined;
-  const popup = new mapboxgl.Popup({
-    offset: [0, -8],
-    closeButton: false,
-    closeOnClick: false,
-  });
-
-  map.on("mousemove", "boundaries-fill", (ev) => {
-    if (hoveredFeatureId !== undefined) {
-      map.setFeatureState(
-        { source: "boundaries", id: hoveredFeatureId },
-        { hover: false }
-      );
-    }
-
-    if (!ev.features || ev.features.length === 0) {
+const addClickListeners = (map: mapboxgl.Map) => {
+  map.on("click", "developments-point", (ev) => {
+    if (!ev.features) {
       return;
     }
 
     const feature = ev.features[0];
-    const properties = feature.properties as CountyProperties;
-    const countyName = properties.ctyua19nm;
+    const coordinates = (feature.geometry as any).coordinates.slice();
+    const development = feature.properties as DevelopmentResult;
+    const logoSrc = builderLogos[development.builder];
+    const [, color] = builderColors.find(
+      (val) => val[0] === development.builder,
+    )!;
 
-    popup
-      .setLngLat(ev.lngLat)
-      .setHTML("<span>" + countyName + "</span>")
+    new mapboxgl.Popup()
+      .setLngLat(coordinates)
+      .setHTML(
+        `
+          <div>
+            <img src=${logoSrc} alt="${development.builder} logo"/>
+            <h2>${development.name}</h2>
+            <p>${development.lng.toFixed(6)} / ${development.lat.toFixed(6)}</p>
+
+            <a href="${
+              development.url
+            }" class="button" target="_blank" rel="noreferrer" style="background-color: ${color}">View</a>
+          </div>
+      `,
+      )
       .addTo(map);
-
-    hoveredFeatureId = feature.id;
-    map.setFeatureState(
-      { source: "boundaries", id: hoveredFeatureId },
-      { hover: true }
-    );
   });
 
-  map.on("mouseleave", "boundaries-fill", () => {
-    popup.remove();
+  // Change the cursor to a pointer when the mouse is over the places layer.
+  map.on("mouseenter", "developments-point", () => {
+    map.getCanvas().style.cursor = "pointer";
+  });
 
-    if (hoveredFeatureId !== undefined) {
-      map.setFeatureState(
-        { source: "boundaries", id: hoveredFeatureId },
-        { hover: false }
-      );
-    }
-    hoveredFeatureId = undefined;
+  // Change it back to a pointer when it leaves.
+  map.on("mouseleave", "developments-point", () => {
+    map.getCanvas().style.cursor = "";
   });
 };
 
-// Converts polygon boundary coordinates from EPSG:27700 to EPSG:4326.
-// NOTE: This mutates!!
-const normalizeData = (data: BoundaryData) => {
-  proj4.defs(
-    "EPSG:27700",
-    "+proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +datum=OSGB36 +units=m +no_defs"
-  );
-
-  // Delete the crs header (not sure why untyped) that states EPSG:27700
-  // incase Mapbox decides to respect this later.
-  delete (data as any).crs;
-
-  data.features.forEach((feature, i) => {
-    feature.geometry.coordinates.forEach((coord, j) => {
-      coord.forEach((pos, k) => {
-        // safety
-        if (pos.length === 0) {
-          return;
-        }
-
-        // Pos is typed as number[] but sometimes it's number[][].
-        // It looks like this could come from an old Geojson spec.
-        const isLegacyGeoJson = Array.isArray(pos[0]);
-        if (isLegacyGeoJson) {
-          pos.forEach((innerPos, l) => {
-            const newVal = proj4(
-              "EPSG:27700",
-              "EPSG:4326",
-              innerPos as never as number[]
-            );
-
-            (data.features[i].geometry.coordinates[j][k][
-              l
-            ] as never as number[]) = newVal;
-          });
-          return;
-        }
-        const newVal = proj4("EPSG:27700", "EPSG:4326", pos);
-
-        data.features[i].geometry.coordinates[j][k] = newVal;
-      });
-    });
+const convertToGeoJson = (
+  results: DevelopmentResult[],
+): FeatureCollection<Point, DevelopmentResult> => {
+  const features = results.map((result): Feature<Point, DevelopmentResult> => {
+    return {
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: [result.lng, result.lat],
+      },
+      properties: result,
+    };
   });
+
+  return {
+    type: "FeatureCollection",
+    features: features,
+  };
 };
 
 export default App;
